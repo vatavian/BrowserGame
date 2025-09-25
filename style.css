@@ -1,0 +1,197 @@
+:root {
+    color-scheme: light dark;
+    --bg: #0b1026;
+    --accent: #ffce54;
+    --accent-strong: #f6a821;
+    --text: #f4f7ff;
+    --muted: #8d97b0;
+    --panel: rgba(20, 24, 48, 0.85);
+    --success: #51cf66;
+    --danger: #ff6b6b;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: "Segoe UI", Roboto, sans-serif;
+    background: radial-gradient(circle at top, #1f2e4d 0%, #0b1026 60%, #040610 100%);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+main {
+    position: relative;
+    flex: 1;
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+}
+
+.app-header {
+    text-align: center;
+    padding: 1.5rem 1rem 0.25rem;
+    background: linear-gradient(180deg, rgba(9, 14, 31, 0.9), rgba(9, 14, 31, 0));
+}
+
+.app-header h1 {
+    margin: 0;
+    font-size: clamp(2rem, 3vw, 3rem);
+    letter-spacing: 0.06em;
+}
+
+.app-header p {
+    margin: 0.35rem 0 1.25rem;
+    color: var(--muted);
+}
+
+#map {
+    width: 100%;
+    height: min(70vh, 480px);
+    border-radius: 1.25rem;
+    margin: 0 auto;
+    max-width: min(960px, 92vw);
+    box-shadow: 0 24px 60px rgba(4, 8, 24, 0.45);
+    border: 2px solid rgba(255, 255, 255, 0.12);
+    overflow: hidden;
+}
+
+.hud {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 0.75rem;
+    max-width: min(960px, 92vw);
+    margin: 0 auto 1rem;
+}
+
+.hud__stat {
+    background: var(--panel);
+    border-radius: 0.85rem;
+    padding: 0.75rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.hud__label {
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+
+.hud__stat span:last-child {
+    font-size: 1.35rem;
+    font-weight: 700;
+}
+
+.controls {
+    max-width: min(960px, 92vw);
+    margin: 1.25rem auto 2rem;
+    display: grid;
+    gap: 0.75rem;
+    background: var(--panel);
+    padding: 1.25rem;
+    border-radius: 1rem;
+}
+
+.controls button {
+    appearance: none;
+    border: none;
+    border-radius: 0.65rem;
+    padding: 0.75rem 1.25rem;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    color: #080b17;
+    background: var(--accent);
+    box-shadow: 0 12px 20px rgba(255, 204, 84, 0.2);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.controls button:active {
+    transform: translateY(1px);
+    box-shadow: 0 8px 16px rgba(255, 204, 84, 0.2);
+}
+
+.controls button[aria-pressed="true"] {
+    background: var(--accent-strong);
+}
+
+.status {
+    margin: 0;
+    font-size: 0.95rem;
+    color: var(--muted);
+    transition: color 0.3s ease;
+}
+
+.status[data-status="success"] {
+    color: var(--success);
+}
+
+.status[data-status="error"] {
+    color: var(--danger);
+}
+
+.status[data-status="info"] {
+    color: var(--muted);
+}
+
+.instructions {
+    background: rgba(9, 14, 31, 0.4);
+    border-radius: 0.6rem;
+    padding: 0.75rem 1rem;
+}
+
+.instructions summary {
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.instructions ol {
+    margin: 0.5rem 0 0;
+    padding-left: 1.25rem;
+    color: rgba(244, 247, 255, 0.8);
+}
+
+.instructions strong {
+    color: var(--accent);
+}
+
+@media (min-height: 900px) {
+    #map {
+        height: 520px;
+    }
+}
+
+.leaflet-container {
+    background: #020308;
+}
+
+.leaflet-marker-icon.target-marker {
+    border-radius: 50%;
+    animation: targetPulse 1.6s infinite;
+}
+
+.player-icon {
+    pointer-events: none;
+}
+
+@keyframes targetPulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(255, 206, 84, 0.5);
+    }
+    70% {
+        box-shadow: 0 0 0 16px rgba(255, 206, 84, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(255, 206, 84, 0);
+    }
+}
+
+body.debug-enabled #map {
+    outline: 3px dashed rgba(255, 255, 255, 0.2);
+}

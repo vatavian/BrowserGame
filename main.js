@@ -1,0 +1,419 @@
+(() => {
+    const GEO_OPTIONS = {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 5000,
+    };
+    const TARGET_DISTANCE_RANGE = [120, 420]; // in meters
+    const TARGET_RADIUS = 35; // completion radius in meters
+    const DEBUG_STEP_METERS = 12;
+
+    const elements = {
+        score: document.getElementById("scoreValue"),
+        targetCount: document.getElementById("targetCount"),
+        distanceToTarget: document.getElementById("distanceToTarget"),
+        distanceTravelled: document.getElementById("distanceTravelled"),
+        gpsAccuracy: document.getElementById("gpsAccuracy"),
+        status: document.getElementById("statusMessage"),
+        startButton: document.getElementById("startButton"),
+        toggleDebug: document.getElementById("toggleDebug"),
+    };
+
+    const state = {
+        map: null,
+        tileLayer: null,
+        playerMarker: null,
+        accuracyCircle: null,
+        targetMarker: null,
+        targetAura: null,
+        watchId: null,
+        hasFirstFix: false,
+        lastFixTimestamp: null,
+        playerPosition: null,
+        displayPosition: null,
+        accuracy: null,
+        score: 0,
+        targetsCollected: 0,
+        distanceTravelled: 0,
+        lastGamePosition: null,
+        gameActive: false,
+        target: null,
+        sprintStart: null,
+        debugEnabled: false,
+        debugOffset: { lat: 0, lng: 0 },
+        mapHasFollowed: false,
+    };
+
+    function init() {
+        initMap();
+        elements.startButton.addEventListener("click", handleStart);
+        elements.toggleDebug.addEventListener("click", toggleDebugMode);
+        document.addEventListener("keydown", maybeHandleDebugNudge, { passive: false });
+        requestLocationStream();
+    }
+
+    function initMap() {
+        state.map = L.map("map", {
+            zoomControl: false,
+            attributionControl: false,
+            preferCanvas: true,
+        }).setView([20, 0], 2);
+
+        state.tileLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            maxZoom: 19,
+        });
+        state.tileLayer.addTo(state.map);
+        L.control.zoom({ position: "topright" }).addTo(state.map);
+        L.control
+            .attribution({ prefix: false })
+            .addTo(state.map)
+            .addAttribution("Map data (c) OpenStreetMap contributors");
+    }
+
+    function requestLocationStream() {
+        if (!("geolocation" in navigator)) {
+            showStatus("Geolocation is not supported by this browser.", "error");
+            elements.startButton.disabled = true;
+            return;
+        }
+
+        showStatus("Waiting for GPS lock...", "info");
+        state.watchId = navigator.geolocation.watchPosition(onLocationUpdate, onLocationError, GEO_OPTIONS);
+    }
+
+    function onLocationUpdate(position) {
+        state.lastFixTimestamp = Date.now();
+        state.playerPosition = {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+        };
+        state.accuracy = position.coords.accuracy;
+        state.hasFirstFix = true;
+
+        if (!state.gameActive) {
+            showStatus("GPS lock acquired. Ready when you are!", "success");
+        }
+
+        if (!state.playerMarker) {
+            createPlayerMarker(state.playerPosition);
+            state.map.setView(state.playerPosition, 16);
+            state.mapHasFollowed = true;
+        }
+
+        updateDisplayedPosition();
+        updateAccuracyVisual();
+        updateHudAccuracy();
+        updateTravelledDistance();
+        updateTargetTracking();
+    }
+
+    function onLocationError(error) {
+        if (error.code === error.PERMISSION_DENIED) {
+            showStatus("Location permission denied. Enable it to play.", "error");
+            elements.startButton.disabled = true;
+            return;
+        }
+        showStatus(`Location error: ${error.message}`, "error");
+    }
+
+    function handleStart() {
+        if (!state.hasFirstFix) {
+            showStatus("Still waiting for your location. Try again in a moment.", "error");
+            return;
+        }
+
+        resetGameState();
+        showStatus("Sprint started! Chase the glowing orb nearby.", "success");
+        spawnTarget();
+    }
+
+    function resetGameState() {
+        state.gameActive = true;
+        state.score = 0;
+        state.targetsCollected = 0;
+        state.distanceTravelled = 0;
+        state.lastGamePosition = state.displayPosition;
+        state.sprintStart = Date.now();
+        elements.score.textContent = "0";
+        elements.targetCount.textContent = "0";
+        elements.distanceTravelled.textContent = formatDistance(0);
+        removeTarget();
+    }
+
+    function createPlayerMarker(position) {
+        const playerIcon = L.divIcon({
+            className: "player-icon",
+            html: '<div style="width:18px;height:18px;border-radius:50%;background:#51cf66;box-shadow:0 0 18px rgba(81,207,102,0.7);"></div>',
+            iconSize: [18, 18],
+            iconAnchor: [9, 9],
+        });
+        state.playerMarker = L.marker(position, { icon: playerIcon }).addTo(state.map);
+
+        state.accuracyCircle = L.circle(position, {
+            radius: state.accuracy || 20,
+            color: "#51cf66",
+            weight: 1,
+            opacity: 0.3,
+            fillColor: "#51cf66",
+            fillOpacity: 0.06,
+        }).addTo(state.map);
+    }
+
+    function updateDisplayedPosition() {
+        if (!state.playerPosition) {
+            return;
+        }
+        const adjusted = applyDebugOffset(state.playerPosition);
+        state.displayPosition = adjusted;
+
+        if (state.playerMarker) {
+            state.playerMarker.setLatLng(adjusted);
+            const center = state.map.getCenter();
+            if (!state.mapHasFollowed || computeDistanceMeters(center, adjusted) > 25) {
+                state.map.panTo(adjusted, { animate: true, duration: 0.35 });
+                state.mapHasFollowed = true;
+            }
+        }
+    }
+
+    function applyDebugOffset(position) {
+        if (!state.debugEnabled) {
+            return { ...position };
+        }
+        return {
+            lat: position.lat + state.debugOffset.lat,
+            lng: position.lng + state.debugOffset.lng,
+        };
+    }
+
+    function updateAccuracyVisual() {
+        if (!state.accuracyCircle || !state.displayPosition) {
+            return;
+        }
+        state.accuracyCircle.setLatLng(state.displayPosition);
+        state.accuracyCircle.setRadius(Math.max(state.accuracy || 20, 10));
+    }
+
+    function updateHudAccuracy() {
+        if (typeof state.accuracy !== "number") {
+            elements.gpsAccuracy.textContent = "--";
+            return;
+        }
+        elements.gpsAccuracy.textContent = formatDistance(state.accuracy);
+    }
+
+    function spawnTarget() {
+        if (!state.displayPosition) {
+            return;
+        }
+        removeTarget();
+        const bearing = Math.random() * 360;
+        const distance = randomBetween(TARGET_DISTANCE_RANGE[0], TARGET_DISTANCE_RANGE[1]);
+        const targetLatLng = projectPoint(state.displayPosition, bearing, distance);
+
+        state.target = {
+            position: targetLatLng,
+            radius: TARGET_RADIUS,
+            spawnedAt: Date.now(),
+        };
+
+        state.targetAura = L.circle(targetLatLng, {
+            radius: TARGET_RADIUS,
+            color: "#ffce54",
+            weight: 1,
+            opacity: 0.35,
+            fillOpacity: 0.08,
+            fillColor: "#ffce54",
+            interactive: false,
+        }).addTo(state.map);
+
+        state.targetMarker = L.circleMarker(targetLatLng, {
+            radius: 12,
+            color: "#f6a821",
+            fillColor: "#ffce54",
+            weight: 3,
+            fillOpacity: 0.9,
+            className: "target-marker",
+        }).addTo(state.map);
+
+        updateTargetTracking();
+    }
+
+    function removeTarget() {
+        if (state.targetMarker) {
+            state.map.removeLayer(state.targetMarker);
+            state.targetMarker = null;
+        }
+        if (state.targetAura) {
+            state.map.removeLayer(state.targetAura);
+            state.targetAura = null;
+        }
+        state.target = null;
+        elements.distanceToTarget.textContent = "--";
+    }
+
+    function updateTravelledDistance() {
+        if (!state.displayPosition) {
+            return;
+        }
+        if (!state.lastGamePosition) {
+            state.lastGamePosition = state.displayPosition;
+            return;
+        }
+        const segment = computeDistanceMeters(state.lastGamePosition, state.displayPosition);
+        if (state.gameActive && segment > 0.4) {
+            state.distanceTravelled += segment;
+            elements.distanceTravelled.textContent = formatDistance(state.distanceTravelled);
+        }
+        state.lastGamePosition = state.displayPosition;
+    }
+
+    function updateTargetTracking() {
+        if (!state.gameActive || !state.target || !state.displayPosition) {
+            return;
+        }
+        const distance = computeDistanceMeters(state.displayPosition, state.target.position);
+        elements.distanceToTarget.textContent = formatDistance(distance);
+        checkTargetCompletion(distance);
+    }
+
+    function checkTargetCompletion(distance) {
+        if (!state.target || distance > state.target.radius) {
+            return;
+        }
+        const elapsedSeconds = (Date.now() - state.target.spawnedAt) / 1000;
+        const basePoints = 150;
+        const speedBonus = Math.max(15, Math.round(120 - elapsedSeconds * 8));
+        const pointsEarned = Math.max(80, basePoints + speedBonus);
+
+        state.score += pointsEarned;
+        state.targetsCollected += 1;
+        elements.score.textContent = state.score.toString();
+        elements.targetCount.textContent = state.targetsCollected.toString();
+
+        showStatus(`Target secured! +${pointsEarned} pts`, "success");
+        removeTarget();
+
+        window.setTimeout(() => {
+            if (state.gameActive) {
+                spawnTarget();
+            }
+        }, 1200);
+    }
+
+    function toggleDebugMode() {
+        state.debugEnabled = !state.debugEnabled;
+        elements.toggleDebug.setAttribute("aria-pressed", String(state.debugEnabled));
+        document.body.classList.toggle("debug-enabled", state.debugEnabled);
+        if (!state.debugEnabled) {
+            state.debugOffset = { lat: 0, lng: 0 };
+            updateDisplayedPosition();
+            updateAccuracyVisual();
+            updateTargetTracking();
+            showStatus("Debug nudge disabled.", "info");
+        } else {
+            showStatus("Debug mode on. Arrow keys nudge your avatar.", "info");
+        }
+    }
+
+    function maybeHandleDebugNudge(event) {
+        if (!state.debugEnabled) {
+            return;
+        }
+        const { key } = event;
+        if (!["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(key)) {
+            return;
+        }
+        event.preventDefault();
+        if (!state.playerPosition) {
+            return;
+        }
+
+        const stepMeters = event.shiftKey ? DEBUG_STEP_METERS * 4 : DEBUG_STEP_METERS;
+        const latFactor = stepMeters / 111111;
+        const effectiveLat = state.playerPosition.lat + state.debugOffset.lat;
+        const lngFactor = stepMeters / (111111 * Math.cos((effectiveLat * Math.PI) / 180));
+
+        switch (key) {
+            case "ArrowUp":
+                state.debugOffset.lat += latFactor;
+                break;
+            case "ArrowDown":
+                state.debugOffset.lat -= latFactor;
+                break;
+            case "ArrowRight":
+                state.debugOffset.lng += lngFactor;
+                break;
+            case "ArrowLeft":
+                state.debugOffset.lng -= lngFactor;
+                break;
+        }
+
+        state.mapHasFollowed = false;
+        updateDisplayedPosition();
+        updateAccuracyVisual();
+        updateTravelledDistance();
+        updateTargetTracking();
+    }
+
+    function projectPoint(origin, bearingDegrees, distanceMeters) {
+        const R = 6371000;
+        const bearing = (bearingDegrees * Math.PI) / 180;
+        const lat1 = (origin.lat * Math.PI) / 180;
+        const lng1 = (origin.lng * Math.PI) / 180;
+        const angularDistance = distanceMeters / R;
+
+        const lat2 = Math.asin(
+            Math.sin(lat1) * Math.cos(angularDistance) +
+                Math.cos(lat1) * Math.sin(angularDistance) * Math.cos(bearing)
+        );
+        const lng2 =
+            lng1 +
+            Math.atan2(
+                Math.sin(bearing) * Math.sin(angularDistance) * Math.cos(lat1),
+                Math.cos(angularDistance) - Math.sin(lat1) * Math.sin(lat2)
+            );
+
+        return {
+            lat: (lat2 * 180) / Math.PI,
+            lng: ((lng2 * 180) / Math.PI + 540) % 360 - 180,
+        };
+    }
+
+    function computeDistanceMeters(a, b) {
+        const R = 6371000;
+        const dLat = toRadians(b.lat - a.lat);
+        const dLng = toRadians(b.lng - a.lng);
+        const lat1 = toRadians(a.lat);
+        const lat2 = toRadians(b.lat);
+        const sinDLat = Math.sin(dLat / 2);
+        const sinDLng = Math.sin(dLng / 2);
+        const h = sinDLat * sinDLat + Math.cos(lat1) * Math.cos(lat2) * sinDLng * sinDLng;
+        return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+    }
+
+    function randomBetween(min, max) {
+        return Math.random() * (max - min) + min;
+    }
+
+    function toRadians(value) {
+        return (value * Math.PI) / 180;
+    }
+
+    function formatDistance(distanceMeters) {
+        if (distanceMeters == null || Number.isNaN(distanceMeters)) {
+            return "--";
+        }
+        if (distanceMeters >= 1000) {
+            return `${(distanceMeters / 1000).toFixed(2)} km`;
+        }
+        return `${Math.round(distanceMeters)} m`;
+    }
+
+    function showStatus(message, tone = "info") {
+        elements.status.textContent = message;
+        elements.status.dataset.status = tone;
+    }
+
+    init();
+})();

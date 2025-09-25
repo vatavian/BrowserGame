@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GeoSprint</title>
+    <link rel="preconnect" href="https://unpkg.com" />
+    <link rel="preconnect" href="https://tile.openstreetmap.org" />
+    <link
+        rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha512-Zcn6bjR/8RZbLEpLIeOwNtzREBAJnUKESxces60Mpoj+2okopSAcSUIUOseddDm0cxnGQzxIR7vJgsLZbdLE3w=="
+        crossorigin=""
+    />
+    <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+    <header class="app-header">
+        <h1>GeoSprint</h1>
+        <p>Chase down the glowing target in your real-world neighborhood.</p>
+    </header>
+    <main>
+        <section class="hud" aria-live="polite">
+            <div class="hud__stat">
+                <span class="hud__label">Score</span>
+                <span id="scoreValue">0</span>
+            </div>
+            <div class="hud__stat">
+                <span class="hud__label">Targets Collected</span>
+                <span id="targetCount">0</span>
+            </div>
+            <div class="hud__stat">
+                <span class="hud__label">Distance To Target</span>
+                <span id="distanceToTarget">--</span>
+            </div>
+            <div class="hud__stat">
+                <span class="hud__label">Travelled</span>
+                <span id="distanceTravelled">0 m</span>
+            </div>
+            <div class="hud__stat">
+                <span class="hud__label">GPS Accuracy</span>
+                <span id="gpsAccuracy">--</span>
+            </div>
+        </section>
+        <div id="map" role="application" aria-label="Map showing your current location"></div>
+        <section class="controls">
+            <button id="startButton" type="button">Start New Sprint</button>
+            <button id="toggleDebug" type="button" aria-pressed="false">Enable Debug Nudge</button>
+            <p id="statusMessage" class="status">Waiting for GPS lock...</p>
+            <details class="instructions">
+                <summary>How to play</summary>
+                <ol>
+                    <li>Allow the browser to access your location.</li>
+                    <li>Press <strong>Start New Sprint</strong> to spawn a glowing orb nearby.</li>
+                    <li>Move in the real world towards the orb until it pulses green.</li>
+                    <li>Each orb is worth more points the faster you reach it.</li>
+                    <li>Stuck indoors? Toggle debug mode and use your arrow keys to test the mechanics.</li>
+                </ol>
+            </details>
+        </section>
+    </main>
+    <script
+        src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha512-BwHfrr4c9kmRkLw6iXFdzcdWV/PGkVgiIyIWLLlTSXzWQzxuSg4DiQUCpauz/EWjgk5TYQqX/kvn9pG1NpYfqg=="
+        crossorigin=""
+    ></script>
+    <script src="main.js"></script>
+</body>
+</html>
