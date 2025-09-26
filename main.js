@@ -42,6 +42,7 @@
         debugEnabled: false,
         debugOffset: { lat: 0, lng: 0 },
         mapHasFollowed: false,
+        userPanActive: false,
     };
 
     function init() {
@@ -63,6 +64,9 @@
             maxZoom: 19,
         });
         state.tileLayer.addTo(state.map);
+        state.map.on("movestart", handleMapMoveStart);
+        state.map.on("move", handleMapMove);
+        state.map.on("moveend", handleMapMoveEnd);
         L.control.zoom({ position: "topright" }).addTo(state.map);
         L.control
             .attribution({ prefix: false })
@@ -159,6 +163,47 @@
         }).addTo(state.map);
     }
 
+    function handleMapMoveStart(event) {
+        if (!state.debugEnabled || !event) {
+            state.userPanActive = false;
+            return;
+        }
+        state.userPanActive = true;
+        syncDebugOffsetToMapCenter();
+    }
+
+    function handleMapMove() {
+        if (!state.debugEnabled || !state.userPanActive) {
+            return;
+        }
+        syncDebugOffsetToMapCenter();
+    }
+
+    function handleMapMoveEnd() {
+        if (!state.debugEnabled || !state.userPanActive) {
+            state.userPanActive = false;
+            return;
+        }
+        state.userPanActive = false;
+        syncDebugOffsetToMapCenter();
+    }
+
+    function syncDebugOffsetToMapCenter() {
+        if (!state.playerPosition || !state.map) {
+            return;
+        }
+        const center = state.map.getCenter();
+        state.debugOffset = {
+            lat: center.lat - state.playerPosition.lat,
+            lng: center.lng - state.playerPosition.lng,
+        };
+        state.mapHasFollowed = true;
+        updateDisplayedPosition();
+        updateAccuracyVisual();
+        updateTravelledDistance();
+        updateTargetTracking();
+    }
+
     function updateDisplayedPosition() {
         if (!state.playerPosition) {
             return;
@@ -168,10 +213,12 @@
 
         if (state.playerMarker) {
             state.playerMarker.setLatLng(adjusted);
-            const center = state.map.getCenter();
-            if (!state.mapHasFollowed || computeDistanceMeters(center, adjusted) > 25) {
-                state.map.panTo(adjusted, { animate: true, duration: 0.35 });
-                state.mapHasFollowed = true;
+            if (!state.userPanActive) {
+                const center = state.map.getCenter();
+                if (!state.mapHasFollowed || computeDistanceMeters(center, adjusted) > 25) {
+                    state.map.panTo(adjusted, { animate: true, duration: 0.35 });
+                    state.mapHasFollowed = true;
+                }
             }
         }
     }
@@ -307,15 +354,18 @@
         document.body.classList.toggle("debug-enabled", state.debugEnabled);
         if (!state.debugEnabled) {
             state.debugOffset = { lat: 0, lng: 0 };
+            state.userPanActive = false;
             updateDisplayedPosition();
             updateAccuracyVisual();
             updateTargetTracking();
-            showStatus("Debug nudge disabled.", "info");
+            showStatus("Debug mode disabled.", "info");
+            elements.toggleDebug.textContent = "Enable Debug Mode";
         } else {
-            showStatus("Debug mode on. Arrow keys nudge your avatar.", "info");
+            state.userPanActive = false;
+            elements.toggleDebug.textContent = "Disable Debug Mode";
+            showStatus("Debug mode on. Pan the map or use arrow keys to move your avatar.", "info");
         }
     }
-
     function maybeHandleDebugNudge(event) {
         if (!state.debugEnabled) {
             return;
