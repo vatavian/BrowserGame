@@ -33,6 +33,7 @@ jobs:
         uses: actions/checkout@v4
       - name: Inject build date into index.html
         run: |
+          export TZ="America/New_York"
           BUILD_DATE="$(date '+%Y-%m-%d %H:%M %Z')"
           sed -i 's|<div id="build-date"></div>|<div id="build-date">Built: '"$BUILD_DATE"'</div>|' index.html
       - name: Setup Pages
