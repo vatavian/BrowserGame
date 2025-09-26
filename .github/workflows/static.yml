@@ -31,6 +31,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Inject build date into index.html
+        run: |
+          BUILD_DATE="$(date '+%Y-%m-%d %H:%M %Z')"
+          sed -i 's|<div id="build-date"></div>|<div id="build-date">Built: '"$BUILD_DATE"'</div>|' index.html
       - name: Setup Pages
         uses: actions/configure-pages@v5
       - name: Upload artifact
