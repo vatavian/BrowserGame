@@ -1,3 +1,14 @@
+/* Build date badge styling */
+#build-date {
+    position: absolute;
+    top: 10px;
+    right: 16px;
+    font-size: 0.85em;
+    color: #405ec2;
+    padding: 2px 8px;
+    z-index: 1000;
+    pointer-events: none;
+}
 :root {
     color-scheme: light dark;
     --bg: #0b1026;
