@@ -19,9 +19,12 @@
         toggleDebug: document.getElementById("toggleDebug"),
     };
 
+    const VECTOR_ZOOM_LEVEL = 18;
+    const VECTOR_CACHE_PREFIX = "geosprint_osm_tile_18_";
+    const VECTOR_CACHE_TTL = 1000 * 60 * 60 * 24; // 24 hours
+
     const state = {
         map: null,
-        tileLayer: null,
         playerMarker: null,
         accuracyCircle: null,
         targetMarker: null,
@@ -43,6 +46,9 @@
         debugOffset: { lat: 0, lng: 0 },
         mapHasFollowed: false,
         userPanActive: false,
+        roadLayerGroup: null,
+        roadTileLayers: new Map(),
+        pendingRoadTiles: new Set(),
     };
 
     function init() {
@@ -58,20 +64,23 @@
             zoomControl: false,
             attributionControl: false,
             preferCanvas: true,
-        }).setView([20, 0], 2);
-
-        state.tileLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            minZoom: 16,
             maxZoom: 19,
-        });
-        state.tileLayer.addTo(state.map);
+        }).setView([20, 0], VECTOR_ZOOM_LEVEL);
+
+        state.roadLayerGroup = L.layerGroup().addTo(state.map);
         state.map.on("movestart", handleMapMoveStart);
         state.map.on("move", handleMapMove);
         state.map.on("moveend", handleMapMoveEnd);
+        state.map.on("moveend", updateRoadTiles);
+        state.map.on("zoomend", updateRoadTiles);
         L.control.zoom({ position: "topright" }).addTo(state.map);
         L.control
             .attribution({ prefix: false })
             .addTo(state.map)
-            .addAttribution("Map data (c) OpenStreetMap contributors");
+            .addAttribution("Map data © OpenStreetMap contributors | Roads via Overpass API");
+
+        updateRoadTiles();
     }
 
     function requestLocationStream() {
@@ -100,8 +109,9 @@
 
         if (!state.playerMarker) {
             createPlayerMarker(state.playerPosition);
-            state.map.setView(state.playerPosition, 16);
+            state.map.setView(state.playerPosition, VECTOR_ZOOM_LEVEL);
             state.mapHasFollowed = true;
+            updateRoadTiles();
         }
 
         updateDisplayedPosition();
@@ -186,6 +196,209 @@
         }
         state.userPanActive = false;
         syncDebugOffsetToMapCenter();
+    }
+
+    function latLngToTile(lat, lng, zoom) {
+        const scale = 1 << zoom;
+        const clampedLat = Math.min(85.05112878, Math.max(-85.05112878, lat));
+        const clampedLng = Math.min(180, Math.max(-180, lng));
+        const xFloat = ((clampedLng + 180) / 360) * scale;
+        const latRad = (clampedLat * Math.PI) / 180;
+        const yFloat =
+            ((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * scale;
+        const x = Math.min(scale - 1, Math.max(0, Math.floor(xFloat)));
+        const y = Math.min(scale - 1, Math.max(0, Math.floor(yFloat)));
+        return { x, y };
+    }
+
+    function tileToBounds(x, y, zoom) {
+        const scale = 1 << zoom;
+        const west = (x / scale) * 360 - 180;
+        const east = ((x + 1) / scale) * 360 - 180;
+        const northRad = Math.atan(Math.sinh(Math.PI - (2 * Math.PI * y) / scale));
+        const southRad = Math.atan(Math.sinh(Math.PI - (2 * Math.PI * (y + 1)) / scale));
+        return {
+            south: (southRad * 180) / Math.PI,
+            west,
+            north: (northRad * 180) / Math.PI,
+            east,
+        };
+    }
+
+    function makeTileCacheKey(x, y) {
+        return `${VECTOR_CACHE_PREFIX}${x}_${y}`;
+    }
+
+    function readTileFromCache(x, y) {
+        let raw;
+        try {
+            raw = localStorage.getItem(makeTileCacheKey(x, y));
+        } catch (error) {
+            console.warn("LocalStorage unavailable for vector cache", error);
+            return null;
+        }
+        if (!raw) {
+            return null;
+        }
+        try {
+            const parsed = JSON.parse(raw);
+            if (!parsed || typeof parsed !== "object") {
+                return null;
+            }
+            if (Date.now() - parsed.timestamp > VECTOR_CACHE_TTL) {
+                try {
+                    localStorage.removeItem(makeTileCacheKey(x, y));
+                } catch (error) {
+                    console.warn("Failed to clear expired vector tile", error);
+                }
+                return null;
+            }
+            return parsed.data;
+        } catch (error) {
+            console.warn("Failed to parse cached vector tile", error);
+            try {
+                localStorage.removeItem(makeTileCacheKey(x, y));
+            } catch (removeError) {
+                console.warn("Failed to remove corrupt vector tile cache entry", removeError);
+            }
+            return null;
+        }
+    }
+
+    function writeTileToCache(x, y, data) {
+        try {
+            const payload = JSON.stringify({ timestamp: Date.now(), data });
+            localStorage.setItem(makeTileCacheKey(x, y), payload);
+        } catch (error) {
+            console.warn("Failed to cache vector tile", error);
+        }
+    }
+
+    function overpassToGeoJSON(elements) {
+        const features = [];
+        for (const element of elements) {
+            if (element.type !== "way" || !Array.isArray(element.geometry)) {
+                continue;
+            }
+            const coordinates = element.geometry.map((point) => [point.lon, point.lat]);
+            if (coordinates.length < 2) {
+                continue;
+            }
+            features.push({
+                type: "Feature",
+                id: `way/${element.id}`,
+                properties: {
+                    highway: element.tags?.highway || null,
+                    name: element.tags?.name || null,
+                },
+                geometry: {
+                    type: "LineString",
+                    coordinates,
+                },
+            });
+        }
+        return { type: "FeatureCollection", features };
+    }
+
+    function styleForRoad(feature) {
+        const highway = feature.properties?.highway || "";
+        const palette = {
+            motorway: { color: "#ff6b6b", weight: 4 },
+            trunk: { color: "#f06595", weight: 3.5 },
+            primary: { color: "#fab005", weight: 3.2 },
+            secondary: { color: "#fcc419", weight: 3 },
+            tertiary: { color: "#ffd43b", weight: 2.6 },
+            residential: { color: "#adb5bd", weight: 2.2 },
+            living_street: { color: "#ced4da", weight: 2 },
+            service: { color: "#dee2e6", weight: 1.8 },
+            footway: { color: "#82c91e", weight: 1.4 },
+            cycleway: { color: "#51cf66", weight: 1.4 },
+            path: { color: "#69db7c", weight: 1.4 },
+        };
+        const defaultStyle = { color: "#4c6ef5", weight: 2.2 };
+        const style = palette[highway] || defaultStyle;
+        return {
+            color: style.color,
+            weight: style.weight,
+            opacity: 0.85,
+            lineCap: "round",
+            lineJoin: "round",
+        };
+    }
+
+    async function fetchTileData(x, y) {
+        const bounds = tileToBounds(x, y, VECTOR_ZOOM_LEVEL);
+        const query = `\n            [out:json][timeout:25];\n            (\n              way[\"highway\"](${bounds.south},${bounds.west},${bounds.north},${bounds.east});\n            );\n            out geom;\n        `;
+        const body = new URLSearchParams({ data: query });
+        const response = await fetch("https://overpass-api.de/api/interpreter", {
+            method: "POST",
+            body,
+            headers: {
+                "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+            },
+        });
+        if (!response.ok) {
+            throw new Error(`Overpass API request failed with ${response.status}`);
+        }
+        const payload = await response.json();
+        return overpassToGeoJSON(payload.elements || []);
+    }
+
+    function addRoadLayerForTile(x, y, geojson) {
+        if (!state.roadLayerGroup) {
+            return;
+        }
+        const layer = L.geoJSON(geojson, { style: styleForRoad });
+        layer.addTo(state.roadLayerGroup);
+        state.roadTileLayers.set(`${x}:${y}`, layer);
+    }
+
+    function removeStaleTiles(neededKeys) {
+        for (const [key, layer] of state.roadTileLayers.entries()) {
+            if (!neededKeys.has(key)) {
+                state.roadLayerGroup.removeLayer(layer);
+                state.roadTileLayers.delete(key);
+            }
+        }
+    }
+
+    function updateRoadTiles() {
+        if (!state.map) {
+            return;
+        }
+        const bounds = state.map.getBounds();
+        const northWest = latLngToTile(bounds.getNorth(), bounds.getWest(), VECTOR_ZOOM_LEVEL);
+        const southEast = latLngToTile(bounds.getSouth(), bounds.getEast(), VECTOR_ZOOM_LEVEL);
+        const neededKeys = new Set();
+        for (let x = northWest.x; x <= southEast.x; x += 1) {
+            for (let y = northWest.y; y <= southEast.y; y += 1) {
+                const key = `${x}:${y}`;
+                neededKeys.add(key);
+                if (state.roadTileLayers.has(key) || state.pendingRoadTiles.has(key)) {
+                    continue;
+                }
+
+                const cached = readTileFromCache(x, y);
+                if (cached) {
+                    addRoadLayerForTile(x, y, cached);
+                    continue;
+                }
+
+                state.pendingRoadTiles.add(key);
+                fetchTileData(x, y)
+                    .then((geojson) => {
+                        addRoadLayerForTile(x, y, geojson);
+                        writeTileToCache(x, y, geojson);
+                    })
+                    .catch((error) => {
+                        console.error("Failed to load OSM vector tile", error);
+                    })
+                    .finally(() => {
+                        state.pendingRoadTiles.delete(key);
+                    });
+            }
+        }
+        removeStaleTiles(neededKeys);
     }
 
     function syncDebugOffsetToMapCenter() {
