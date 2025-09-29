@@ -20,8 +20,8 @@
     };
 
     const VECTOR_ZOOM_LEVEL = 18;
-    const VECTOR_CACHE_PREFIX = "geosprint_osm_tile_18_";
-    const VECTOR_CACHE_TTL = 1000 * 60 * 60 * 24; // 24 hours
+    const VECTOR_CACHE_PREFIX = "osm_vector_tile"; // Prefix for localStorage keys;
+    const VECTOR_CACHE_TTL = 1000 * 60 * 60 * 24 * 30; // cache for 30 days
 
     const state = {
         map: null,
@@ -226,13 +226,14 @@
     }
 
     function makeTileCacheKey(x, y) {
-        return `${VECTOR_CACHE_PREFIX}${x}_${y}`;
+        return `${VECTOR_CACHE_PREFIX}_${VECTOR_ZOOM_LEVEL}_${x}_${y}`;
     }
 
     function readTileFromCache(x, y) {
-        let raw;
+        let raw, cacheKey;
         try {
-            raw = localStorage.getItem(makeTileCacheKey(x, y));
+            cacheKey = makeTileCacheKey(x, y);
+            raw = localStorage.getItem(cacheKey);
         } catch (error) {
             console.warn("LocalStorage unavailable for vector cache", error);
             return null;
@@ -247,7 +248,7 @@
             }
             if (Date.now() - parsed.timestamp > VECTOR_CACHE_TTL) {
                 try {
-                    localStorage.removeItem(makeTileCacheKey(x, y));
+                    localStorage.removeItem(cacheKey);
                 } catch (error) {
                     console.warn("Failed to clear expired vector tile", error);
                 }
@@ -257,7 +258,7 @@
         } catch (error) {
             console.warn("Failed to parse cached vector tile", error);
             try {
-                localStorage.removeItem(makeTileCacheKey(x, y));
+                localStorage.removeItem(cacheKey);
             } catch (removeError) {
                 console.warn("Failed to remove corrupt vector tile cache entry", removeError);
             }
@@ -330,7 +331,7 @@
         const bounds = tileToBounds(x, y, VECTOR_ZOOM_LEVEL);
         const query = `\n            [out:json][timeout:25];\n            (\n              way[\"highway\"](${bounds.south},${bounds.west},${bounds.north},${bounds.east});\n            );\n            out geom;\n        `;
         const body = new URLSearchParams({ data: query });
-        const response = await fetch("https://overpass-api.de/api/interpreter", {
+        const response = await fetch("https://overpass.private.coffee/api/interpreter", {
             method: "POST",
             body,
             headers: {
