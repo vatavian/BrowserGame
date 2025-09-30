@@ -8,6 +8,14 @@
     const TARGET_RADIUS = 35; // completion radius in meters
     const DEBUG_STEP_METERS = 12;
 
+    // TODO: add user setting toggle
+    let DBG = localStorage.getItem('DBG') === 'true' || (window.location.href.startsWith('http://localhost:') && localStorage.getItem('DBG') != 'false');
+    function dbg(msg) { if (DBG || state.debugEnabled) console.log(msg); }
+
+    // When editing OVERPASS_SERVER, also update index.html preconnect link
+    // TODO: add user setting choice between known servers
+    let OVERPASS_SERVER = localStorage.getItem('OVERPASS_SERVER') || "overpass.private.coffee"; // "overpass-api.de"
+
     const elements = {
         score: document.getElementById("scoreValue"),
         targetCount: document.getElementById("targetCount"),
@@ -19,7 +27,7 @@
         toggleDebug: document.getElementById("toggleDebug"),
     };
 
-    const VECTOR_ZOOM_LEVEL = 18;
+    const ZOOM_LEVEL = +localStorage.getItem("ZOOM_LEVEL") || 18;
     const VECTOR_CACHE_PREFIX = "osm_vector_tile"; // Prefix for localStorage keys;
     const VECTOR_CACHE_TTL = 1000 * 60 * 60 * 24 * 30; // cache for 30 days
 
@@ -64,9 +72,9 @@
             zoomControl: false,
             attributionControl: false,
             preferCanvas: true,
-            minZoom: 16,
-            maxZoom: 19,
-        }).setView([20, 0], VECTOR_ZOOM_LEVEL);
+            minZoom: ZOOM_LEVEL,
+            maxZoom: ZOOM_LEVEL,
+        }).setView([20, 0], ZOOM_LEVEL);
 
         state.roadLayerGroup = L.layerGroup().addTo(state.map);
         state.map.on("movestart", handleMapMoveStart);
@@ -74,11 +82,10 @@
         state.map.on("moveend", handleMapMoveEnd);
         state.map.on("moveend", updateRoadTiles);
         state.map.on("zoomend", updateRoadTiles);
-        L.control.zoom({ position: "topright" }).addTo(state.map);
         L.control
             .attribution({ prefix: false })
             .addTo(state.map)
-            .addAttribution("Map data © OpenStreetMap contributors | Roads via Overpass API");
+            .addAttribution("Map data © OpenStreetMap contributors, loaded via " + OVERPASS_SERVER + ", displayed with Leaflet");
 
         updateRoadTiles();
     }
@@ -109,7 +116,7 @@
 
         if (!state.playerMarker) {
             createPlayerMarker(state.playerPosition);
-            state.map.setView(state.playerPosition, VECTOR_ZOOM_LEVEL);
+            state.map.setView(state.playerPosition, ZOOM_LEVEL);
             state.mapHasFollowed = true;
             updateRoadTiles();
         }
@@ -226,7 +233,7 @@
     }
 
     function makeTileCacheKey(x, y) {
-        return `${VECTOR_CACHE_PREFIX}_${VECTOR_ZOOM_LEVEL}_${x}_${y}`;
+        return `${VECTOR_CACHE_PREFIX}_${ZOOM_LEVEL}_${x}_${y}`;
     }
 
     function readTileFromCache(x, y) {
@@ -328,10 +335,11 @@
     }
 
     async function fetchTileData(x, y) {
-        const bounds = tileToBounds(x, y, VECTOR_ZOOM_LEVEL);
+        dbg(`Fetching data for tile ${x},${y} at zoom ${ZOOM_LEVEL}`);
+        const bounds = tileToBounds(x, y, ZOOM_LEVEL);
         const query = `\n            [out:json][timeout:25];\n            (\n              way[\"highway\"](${bounds.south},${bounds.west},${bounds.north},${bounds.east});\n            );\n            out geom;\n        `;
         const body = new URLSearchParams({ data: query });
-        const response = await fetch("https://overpass.private.coffee/api/interpreter", {
+        const response = await fetch("https://" + OVERPASS_SERVER + "/api/interpreter", {
             method: "POST",
             body,
             headers: {
@@ -368,8 +376,8 @@
             return;
         }
         const bounds = state.map.getBounds();
-        const northWest = latLngToTile(bounds.getNorth(), bounds.getWest(), VECTOR_ZOOM_LEVEL);
-        const southEast = latLngToTile(bounds.getSouth(), bounds.getEast(), VECTOR_ZOOM_LEVEL);
+        const northWest = latLngToTile(bounds.getNorth(), bounds.getWest(), ZOOM_LEVEL);
+        const southEast = latLngToTile(bounds.getSouth(), bounds.getEast(), ZOOM_LEVEL);
         const neededKeys = new Set();
         for (let x = northWest.x; x <= southEast.x; x += 1) {
             for (let y = northWest.y; y <= southEast.y; y += 1) {
@@ -381,6 +389,7 @@
 
                 const cached = readTileFromCache(x, y);
                 if (cached) {
+                    dbg(`Found cached data for tile ${x},${y}`);
                     addRoadLayerForTile(x, y, cached);
                     continue;
                 }
@@ -388,6 +397,7 @@
                 state.pendingRoadTiles.add(key);
                 fetchTileData(x, y)
                     .then((geojson) => {
+                        dbg(`Fetched data for tile ${x},${y}`);
                         addRoadLayerForTile(x, y, geojson);
                         writeTileToCache(x, y, geojson);
                     })
@@ -427,9 +437,22 @@
 
         if (state.playerMarker) {
             state.playerMarker.setLatLng(adjusted);
-            if (!state.userPanActive) {
+//            const heading = state.playerMarker.options.rotationAngle || 0;
+//            state.playerMarker.setRotationAngle(heading);
+            const boundsFraction = 0.9;
+            const curBounds = state.map.getBounds();
+            const latDist = (curBounds.getNorth() - curBounds.getSouth()) * boundsFraction;
+            const lngDist = (curBounds.getEast() - curBounds.getWest()) * boundsFraction;
+            const newMaxBounds = L.latLngBounds(
+                L.latLng(adjusted.lat - latDist, adjusted.lng - lngDist),
+                L.latLng(adjusted.lat + latDist, adjusted.lng + lngDist));
+            // dbg("bounds", curBounds.toBBoxString(), "+", boundsFraction, "=", newMaxBounds.toBBoxString());
+            state.map.setMaxBounds(newMaxBounds);
+            if (state.userPanActive) {
+                state.map.panInsideBounds(newMaxBounds, { animate: false });
+            } else {
                 const center = state.map.getCenter();
-                if (!state.mapHasFollowed || computeDistanceMeters(center, adjusted) > 25) {
+                if (!state.mapHasFollowed) {
                     state.map.panTo(adjusted, { animate: true, duration: 0.35 });
                     state.mapHasFollowed = true;
                 }
