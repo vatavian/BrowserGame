@@ -28,7 +28,7 @@
     };
 
     const ZOOM_LEVEL = +localStorage.getItem("ZOOM_LEVEL") || 18;
-    const VECTOR_CACHE_PREFIX = "osm_vector_tile"; // Prefix for localStorage keys;
+    const VECTOR_CACHE_PREFIX = "vtile"; // Prefix for localStorage keys;
     const VECTOR_CACHE_TTL = 1000 * 60 * 60 * 24 * 30; // cache for 30 days
 
     const state = {
@@ -60,6 +60,7 @@
     };
 
     function init() {
+        window.backdoor = state;
         initMap();
         elements.startButton.addEventListener("click", handleStart);
         elements.toggleDebug.addEventListener("click", toggleDebugMode);
@@ -236,11 +237,10 @@
         return `${VECTOR_CACHE_PREFIX}_${ZOOM_LEVEL}_${x}_${y}`;
     }
 
-    function readTileFromCache(x, y) {
-        let raw, cacheKey;
+    function readTileFromCache(key) {
+        let raw;
         try {
-            cacheKey = makeTileCacheKey(x, y);
-            raw = localStorage.getItem(cacheKey);
+            raw = localStorage.getItem(key);
         } catch (error) {
             console.warn("LocalStorage unavailable for vector cache", error);
             return null;
@@ -255,7 +255,7 @@
             }
             if (Date.now() - parsed.timestamp > VECTOR_CACHE_TTL) {
                 try {
-                    localStorage.removeItem(cacheKey);
+                    localStorage.removeItem(key);
                 } catch (error) {
                     console.warn("Failed to clear expired vector tile", error);
                 }
@@ -265,7 +265,7 @@
         } catch (error) {
             console.warn("Failed to parse cached vector tile", error);
             try {
-                localStorage.removeItem(cacheKey);
+                localStorage.removeItem(key);
             } catch (removeError) {
                 console.warn("Failed to remove corrupt vector tile cache entry", removeError);
             }
@@ -273,12 +273,12 @@
         }
     }
 
-    function writeTileToCache(x, y, data) {
+    function writeTileToCache(key, data) {
         try {
             const payload = JSON.stringify({ timestamp: Date.now(), data });
-            localStorage.setItem(makeTileCacheKey(x, y), payload);
+            localStorage.setItem(key, payload);
         } catch (error) {
-            console.warn("Failed to cache vector tile", error);
+            console.warn("Failed to cache vector tile", key, error);
         }
     }
 
@@ -347,19 +347,19 @@
             },
         });
         if (!response.ok) {
-            throw new Error(`Overpass API request failed with ${response.status}`);
+            throw new Error(`Overpass API request for tile ${x},${y} failed with ${response.status}`);
         }
         const payload = await response.json();
         return overpassToGeoJSON(payload.elements || []);
     }
 
-    function addRoadLayerForTile(x, y, geojson) {
+    function addRoadLayerForTile(key, geojson) {
         if (!state.roadLayerGroup) {
             return;
         }
         const layer = L.geoJSON(geojson, { style: styleForRoad });
         layer.addTo(state.roadLayerGroup);
-        state.roadTileLayers.set(`${x}:${y}`, layer);
+        state.roadTileLayers.set(key, layer);
     }
 
     function removeStaleTiles(neededKeys) {
@@ -381,28 +381,28 @@
         const neededKeys = new Set();
         for (let x = northWest.x; x <= southEast.x; x += 1) {
             for (let y = northWest.y; y <= southEast.y; y += 1) {
-                const key = `${x}:${y}`;
+                const key = makeTileCacheKey(x, y); // `${x}:${y}`;
                 neededKeys.add(key);
                 if (state.roadTileLayers.has(key) || state.pendingRoadTiles.has(key)) {
                     continue;
                 }
 
-                const cached = readTileFromCache(x, y);
+                const cached = readTileFromCache(key);
                 if (cached) {
-                    dbg(`Found cached data for tile ${x},${y}`);
-                    addRoadLayerForTile(x, y, cached);
+                    dbg(`Found cached data for tile ${key}`);
+                    addRoadLayerForTile(key, cached);
                     continue;
                 }
 
                 state.pendingRoadTiles.add(key);
                 fetchTileData(x, y)
                     .then((geojson) => {
-                        dbg(`Fetched data for tile ${x},${y}`);
-                        addRoadLayerForTile(x, y, geojson);
-                        writeTileToCache(x, y, geojson);
+                        dbg(`Fetched data for tile ${key}`);
+                        addRoadLayerForTile(key, geojson);
+                        writeTileToCache(key, geojson);
                     })
                     .catch((error) => {
-                        console.error("Failed to load OSM vector tile", error);
+                        console.error("Failed to load OSM ", key, error, "GeoJSON:", geojson);
                     })
                     .finally(() => {
                         state.pendingRoadTiles.delete(key);
