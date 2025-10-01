@@ -4,7 +4,6 @@
         timeout: 15000,
         maximumAge: 5000,
     };
-    const TARGET_DISTANCE_RANGE = [120, 420]; // in meters
     const TARGET_RADIUS = 35; // completion radius in meters
     const DEBUG_STEP_METERS = 12;
 
@@ -35,8 +34,6 @@
         map: null,
         playerMarker: null,
         accuracyCircle: null,
-        targetMarker: null,
-        targetAura: null,
         watchId: null,
         hasFirstFix: false,
         lastFixTimestamp: null,
@@ -44,12 +41,10 @@
         displayPosition: null,
         accuracy: null,
         score: 0,
-        targetsCollected: 0,
         distanceTravelled: 0,
         lastGamePosition: null,
         gameActive: false,
         target: null,
-        sprintStart: null,
         debugEnabled: false,
         debugOffset: { lat: 0, lng: 0 },
         mapHasFollowed: false,
@@ -57,6 +52,8 @@
         roadLayerGroup: null,
         roadTileLayers: new Map(),
         pendingRoadTiles: new Set(),
+        targetIntersections: [],
+        visitedIntersections: [],
     };
 
     function init() {
@@ -146,20 +143,18 @@
 
         resetGameState();
         showStatus("Sprint started! Chase the glowing orb nearby.", "success");
-        spawnTarget();
+        spawnTargetsAtIntersections();
     }
 
     function resetGameState() {
         state.gameActive = true;
         state.score = 0;
-        state.targetsCollected = 0;
         state.distanceTravelled = 0;
         state.lastGamePosition = state.displayPosition;
-        state.sprintStart = Date.now();
         elements.score.textContent = "0";
         elements.targetCount.textContent = "0";
         elements.distanceTravelled.textContent = formatDistance(0);
-        removeTarget();
+        removeTargets();
     }
 
     function createPlayerMarker(position) {
@@ -479,61 +474,66 @@
     }
 
     function updateHudAccuracy() {
-        if (typeof state.accuracy !== "number") {
-            elements.gpsAccuracy.textContent = "--";
-            return;
-        }
         elements.gpsAccuracy.textContent = formatDistance(state.accuracy);
     }
 
-    function spawnTarget() {
+    // For each vector tile, find intersections between roads.
+    // Returns array of [lon, lat] points.
+    // Duplicate points are not added to return array.
+    function findIntersections() {
+        const intersections = [];
+        const seen = new Set();
+        if (!state.roadTileLayers) return intersections;
+        state.roadTileLayers.forEach((tile, key) => {
+            tile.getLayers()?.forEach(({feature: feature1}) => {
+                const c1 = feature1?.geometry?.coordinates;
+                if (c1) tile.getLayers()?.forEach(({feature: feature2}) => {
+                    if (feature2?.id > feature1.id) { // avoid double-checking pairs
+                        intersect = feature2.geometry?.coordinates?.find(c2c =>
+                            c1.find(c1c => c1c[0] === c2c[0] && c1c[1] === c2c[1]));
+                        if (intersect) {
+                            const key = intersect[0].toFixed(6) + "," + intersect[1].toFixed(6);
+                            if (!seen.has(key)) {
+                                seen.add(key);
+                                intersections.push(intersect); //{point: intersect, roads: [feature1, feature2]});
+                            }
+                        }
+                    }
+                });
+            });
+        });
+        return intersections;
+    }
+
+    function spawnTargetsAtIntersections() {
         if (!state.displayPosition) {
             return;
         }
-        removeTarget();
-        const bearing = Math.random() * 360;
-        const distance = randomBetween(TARGET_DISTANCE_RANGE[0], TARGET_DISTANCE_RANGE[1]);
-        const targetLatLng = projectPoint(state.displayPosition, bearing, distance);
-
-        state.target = {
-            position: targetLatLng,
-            radius: TARGET_RADIUS,
-            spawnedAt: Date.now(),
+        removeTargets();
+        const now = Date.now();
+        for (const intersection of findIntersections()) {
+            const latlng = { lat: intersection[1], lng: intersection[0] };
+            const marker = L.circleMarker(latlng, {
+                radius: 12,
+                color: "#f6a821",
+                fillColor: "#ffce54",
+                weight: 3,
+                fillOpacity: 0.9,
+                className: "target-marker",
+            }).addTo(state.map);
+            state.targetIntersections.push({
+                position: intersection,
+                radius: TARGET_RADIUS,
+                spawnedAt: Date.now(),
+                marker: marker,
+            });
         };
-
-        state.targetAura = L.circle(targetLatLng, {
-            radius: TARGET_RADIUS,
-            color: "#ffce54",
-            weight: 1,
-            opacity: 0.35,
-            fillOpacity: 0.08,
-            fillColor: "#ffce54",
-            interactive: false,
-        }).addTo(state.map);
-
-        state.targetMarker = L.circleMarker(targetLatLng, {
-            radius: 12,
-            color: "#f6a821",
-            fillColor: "#ffce54",
-            weight: 3,
-            fillOpacity: 0.9,
-            className: "target-marker",
-        }).addTo(state.map);
-
-        updateTargetTracking();
     }
 
-    function removeTarget() {
-        if (state.targetMarker) {
-            state.map.removeLayer(state.targetMarker);
-            state.targetMarker = null;
-        }
-        if (state.targetAura) {
-            state.map.removeLayer(state.targetAura);
-            state.targetAura = null;
-        }
-        state.target = null;
+    function removeTargets() {
         elements.distanceToTarget.textContent = "--";
+        state.targetIntersections.forEach(({marker}) => state.map.removeLayer(marker));
+        state.targetIntersections = [];
     }
 
     function updateTravelledDistance() {
@@ -553,36 +553,34 @@
     }
 
     function updateTargetTracking() {
-        if (!state.gameActive || !state.target || !state.displayPosition) {
-            return;
-        }
-        const distance = computeDistanceMeters(state.displayPosition, state.target.position);
-        elements.distanceToTarget.textContent = formatDistance(distance);
-        checkTargetCompletion(distance);
-    }
+        if (state.gameActive && state.displayPosition && state.targetIntersections.length > 0) {
+            let closest = null;
+            for (const intersection of state.targetIntersections) {
+                const distance = computeDistanceMeters(state.displayPosition, {lat: intersection.position[1], lng: intersection.position[0]});
+                if (distance <= intersection.radius) {
+                    state.visitedIntersections.push(intersection);
+                    state.map.removeLayer(intersection.marker);
+                    intersection.marker = L.circleMarker({ lat: intersection.position[1], lng: intersection.position[0] }, {
+                        radius: 12,
+                        color: "#17c04cff",
+                        fillColor: "#80e791ff",
+                        weight: 3,
+                        fillOpacity: 0.9,
+                        className: "target-marker",
+                    }).addTo(state.map);
 
-    function checkTargetCompletion(distance) {
-        if (!state.target || distance > state.target.radius) {
-            return;
-        }
-        const elapsedSeconds = (Date.now() - state.target.spawnedAt) / 1000;
-        const basePoints = 150;
-        const speedBonus = Math.max(15, Math.round(120 - elapsedSeconds * 8));
-        const pointsEarned = Math.max(80, basePoints + speedBonus);
-
-        state.score += pointsEarned;
-        state.targetsCollected += 1;
-        elements.score.textContent = state.score.toString();
-        elements.targetCount.textContent = state.targetsCollected.toString();
-
-        showStatus(`Target secured! +${pointsEarned} pts`, "success");
-        removeTarget();
-
-        window.setTimeout(() => {
-            if (state.gameActive) {
-                spawnTarget();
+                    state.targetIntersections = state.targetIntersections.filter(i => i !== intersection);
+                    state.score += 10;
+                    elements.score.textContent = state.score.toString();
+                    elements.targetCount.textContent = (state.visitedIntersections.length).toString();
+                    showStatus("Intersection reached!", "success");
+                    return;
+                } else if (!closest || distance < closest) {
+                    closest = distance;
+                }
             }
-        }, 1200);
+            elements.distanceToTarget.textContent = formatDistance(closest);
+        }
     }
 
     function toggleDebugMode() {
@@ -688,7 +686,7 @@
     }
 
     function formatDistance(distanceMeters) {
-        if (distanceMeters == null || Number.isNaN(distanceMeters)) {
+        if ((typeof distanceMeters !== "number") || Number.isNaN(distanceMeters)) {
             return "--";
         }
         if (distanceMeters >= 1000) {
