@@ -402,7 +402,7 @@
                         writeTileToCache(key, geojson);
                     })
                     .catch((error) => {
-                        console.error("Failed to load OSM ", key, error, "GeoJSON:", geojson);
+                        console.error("Failed to load data for", key, error);
                     })
                     .finally(() => {
                         state.pendingRoadTiles.delete(key);
