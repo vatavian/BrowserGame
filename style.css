@@ -33,15 +33,34 @@ body {
     min-height: 100vh;
     display: flex;
     flex-direction: column;
-    height: 100%;
 }
 
 main {
-    flex: 1;
-    display: grid;
-    grid-template-rows: auto 1fr auto;
-    height: 100%;
-    min-height: 0;
+    position: relative;
+    width: 100%;
+    height: 100vh;
+    overflow: hidden;
+}
+
+/* Panels */
+.menu-panel,
+.map-container {
+    position: absolute;
+    inset: 0;
+    transition: transform 0.5s ease, opacity 0.5s ease;
+    transform-origin: top right;
+}
+
+/* Start with menu visible, map hidden */
+.menu-panel {
+    background: var(--panel);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 2rem 1rem;
+    transform: scale(1);
+    opacity: 1;
 }
 
 .app-header {
@@ -62,16 +81,53 @@ main {
 }
 
 .map-container {
-    position: relative;
-    width: 100%;
-    height: 100%;
-    overflow: hidden;
+    transform: scale(0);
+    opacity: 0;
+}
+
+/* Active states (JS will toggle these) */
+main.show-map .map-container {
+    transform: scale(1);
+    opacity: 1;
+}
+main.show-map .menu-panel {
+    transform: scale(0);
+    opacity: 0;
+}
+
+/* Menu toggle button */
+.menu-toggle {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    width: 2.5rem;
+    height: 2.5rem;
+    border: none;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+    z-index: 1001;
+    display: flex;
+    align-items: center;
+    justify-content: center; /* Center the icon */
+}
+
+.menu-toggle::before {
+    content: "×"; /* Default to X when menu-panel is visible (no show-map) */
+    font-size: 1.5rem;
+    color: #080b17;
+    font-weight: bold; /* Ensure X is prominent */
+}
+
+main.show-map .menu-toggle::before {
+    content: "≡"; /* Hamburger when map-container is visible (show-map) */
 }
 
 #map {
     width: 100%;
     height: 100%;
-    z-index: 0;
+    z-index: 1;
     border-radius: 1.25rem;
     box-shadow: 0 24px 60px rgba(4, 8, 24, 0.45);
     border: 2px solid rgba(255, 255, 255, 0.12);
@@ -80,25 +136,26 @@ main {
 .hud {
     position: absolute;
     top: 1rem;
-    left: 50%;
-    transform: translateX(-50%);
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+    width: 95%;
+    display: flex;
+    flex-wrap: nowrap;
+    justify-content: center;
     gap: 0.75rem;
-    width: 100%;
     padding: 0 1rem;
     z-index: 10;
     pointer-events: none;
-    background: rgba(0, 0, 0, 0.5); /* TEMPORARY for debugging */
+    background: rgba(0, 0, 0, 0.25);
 }
 
 .hud__stat {
     background: transparent;
-    border-radius: 0.85rem;
-    padding: 0.75rem 1rem;
+    padding: 0.75rem 0.5rem;
     display: flex;
     flex-direction: column;
     gap: 0.35rem;
+    flex: 0 1 auto; /* Allow shrinking, no growing, auto width */
+    min-width: 50px; 
+    text-align: center;
 }
 
 .hud__label {
@@ -114,40 +171,39 @@ main {
 }
 
 .controls {
-    max-width: min(960px, 92vw);
-    margin: 1.25rem auto 2rem;
-    display: grid;
-    gap: 0.75rem;
-    background: var(--panel);
-    padding: 1.25rem;
-    border-radius: 1rem;
+  display: grid;
+  gap: 1rem;
+  width: 100%;
+  max-width: 400px;
+  margin-top: 2rem;
 }
-
 .controls button {
-    appearance: none;
-    border: none;
-    border-radius: 0.65rem;
-    padding: 0.75rem 1.25rem;
-    font-size: 1rem;
-    font-weight: 600;
-    cursor: pointer;
-    color: #080b17;
-    background: var(--accent);
-    box-shadow: 0 12px 20px rgba(255, 204, 84, 0.2);
-    transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+  border: none;
+  padding: 1rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+  border-radius: 0.75rem;
+  background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+  color: #080b17;
+  cursor: pointer;
+  box-shadow: 0 6px 14px rgba(0,0,0,0.3);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
-
+.controls button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(0,0,0,0.35);
+}
 .controls button:active {
-    transform: translateY(1px);
-    box-shadow: 0 8px 16px rgba(255, 204, 84, 0.2);
-}
-
-.controls button[aria-pressed="true"] {
-    background: var(--accent-strong);
+  transform: translateY(1px);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.25);
 }
 
 .status {
-    margin: 0;
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    z-index: 1000;
+    pointer-events: none;
     font-size: 0.95rem;
     color: var(--muted);
     transition: color 0.3s ease;

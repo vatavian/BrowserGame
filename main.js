@@ -22,8 +22,10 @@
         distanceTravelled: document.getElementById("distanceTravelled"),
         gpsAccuracy: document.getElementById("gpsAccuracy"),
         status: document.getElementById("statusMessage"),
+        credits: document.getElementById("credits"),
         startButton: document.getElementById("startButton"),
         toggleDebug: document.getElementById("toggleDebug"),
+        menuToggle: document.querySelector(".menu-toggle"),
     };
 
     const ZOOM_LEVEL = +localStorage.getItem("ZOOM_LEVEL") || 18;
@@ -59,8 +61,11 @@
     function init() {
         window.backdoor = state;
         initMap();
+
+        elements.menuToggle.addEventListener("click", toggleMap);
         elements.startButton.addEventListener("click", handleStart);
         elements.toggleDebug.addEventListener("click", toggleDebugMode);
+        elements.credits.innerText = "Map data © OpenStreetMap contributors, loaded via " + OVERPASS_SERVER + ", displayed with Leaflet";
         document.addEventListener("keydown", maybeHandleDebugNudge, { passive: false });
         requestLocationStream();
     }
@@ -82,8 +87,7 @@
         state.map.on("zoomend", updateRoadTiles);
         L.control
             .attribution({ prefix: false })
-            .addTo(state.map)
-            .addAttribution("Map data © OpenStreetMap contributors, loaded via " + OVERPASS_SERVER + ", displayed with Leaflet");
+            .addTo(state.map);
 
         updateRoadTiles();
     }
@@ -135,12 +139,15 @@
         showStatus(`Location error: ${error.message}`, "error");
     }
 
+    function toggleMap() {
+        document.querySelector('main').classList.toggle('show-map'); 
+    }
     function handleStart() {
         if (!state.hasFirstFix) {
             showStatus("Still waiting for your location. Try again in a moment.", "error");
             return;
         }
-
+        toggleMap();
         resetGameState();
         showStatus("Sprint started! Chase the glowing orb nearby.", "success");
         spawnTargetsAtIntersections();
@@ -344,8 +351,13 @@
         if (!response.ok) {
             throw new Error(`Overpass API request for tile ${x},${y} failed with ${response.status}`);
         }
-        const payload = await response.json();
-        return overpassToGeoJSON(payload.elements || []);
+        try {
+            const payload = await response.json();
+            return overpassToGeoJSON(payload.elements || []);
+        } catch (error) {
+            console.log("Response text:", await response.text());
+            throw new Error(`Failed to parse Overpass API response for tile ${x},${y}: ${error.message}`);
+        }
     }
 
     function addRoadLayerForTile(key, geojson) {
@@ -392,7 +404,7 @@
                 state.pendingRoadTiles.add(key);
                 fetchTileData(x, y)
                     .then((geojson) => {
-                        dbg(`Fetched data for tile ${key}`);
+                        dbg(`Fetched data for tile ${key}: ${geojson}`);
                         addRoadLayerForTile(key, geojson);
                         writeTileToCache(key, geojson);
                     })
@@ -600,6 +612,7 @@
             elements.toggleDebug.textContent = "Disable Debug Mode";
             showStatus("Debug mode on. Pan the map or use arrow keys to move your avatar.", "info");
         }
+        toggleMap();
     }
     function maybeHandleDebugNudge(event) {
         if (!state.debugEnabled) {

@@ -17,10 +17,28 @@
 <body>
     <div id="build-date"></div>
     <main>
-        <header class="app-header">
-            <h1>GeoSprint</h1>
-            <p>Chase down the glowing target in your real-world neighborhood.</p>
-        </header>
+        <div class="menu-panel">
+            <header class="app-header">
+                <h1>GeoGame</h1>
+                <p>Chase down the glowing targets in your real-world neighborhood.</p>
+            </header>
+            <section class="controls">
+                <button id="startButton" type="button">Start Game</button>
+                <label class="checkbox-label">
+                    <input id="toggleDebug" type="checkbox"> Debug Mode
+                </label>
+                <details class="instructions">
+                    <summary>How to play</summary>
+                    <ol>
+                        <li>Allow the browser to access your location.</li>
+                        <li>Press <strong>Start Game</strong> to spawn glowing orbs at nearby intersections.</li>
+                        <li>Move in the real world towards an orb until it turns green.</li>
+                        <li>Stuck indoors? Toggle debug mode and drag the map or use arrow keys to move.</li>
+                    </ol>
+                </details>
+                <p id="credits"></p>
+            </section>
+        </div>
         <div class="map-container">
             <div id="map" role="application" aria-label="Map showing your current location"></div>
             <div class="hud" aria-live="polite">
@@ -46,21 +64,8 @@
                 </div>
             </div>
         </div>
-        <section class="controls">
-            <button id="startButton" type="button">Start New Sprint</button>
-            <button id="toggleDebug" type="button" aria-pressed="false">Enable Debug Mode</button>
-            <p id="statusMessage" class="status">Waiting for GPS lock...</p>
-            <details class="instructions">
-                <summary>How to play</summary>
-                <ol>
-                    <li>Allow the browser to access your location.</li>
-                    <li>Press <strong>Start New Sprint</strong> to spawn a glowing orb nearby.</li>
-                    <li>Move in the real world towards the orb until it pulses green.</li>
-                    <li>Each orb is worth more points the faster you reach it.</li>
-                    <li>Stuck indoors? Toggle debug mode and use your arrow keys to test the mechanics.</li>
-                </ol>
-            </details>
-        </section>
+        <button class="menu-toggle" aria-label="Toggle menu"></button>
+        <p id="statusMessage" class="status">Waiting for GPS lock...</p>
     </main>
     <script
         src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
