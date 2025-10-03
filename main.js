@@ -713,6 +713,62 @@
         elements.status.textContent = message;
         elements.status.dataset.status = tone;
     }
+    let stream = null;
+    let video = null;
+    let canvas = null;
+    let imgElement = null;
+
+    elements.cameraButton.addEventListener('click', () => {
+        if (!stream) {
+            startCamera();
+        }
+        else {
+            takePhoto();
+        }
+    });
+
+    async function startCamera() {
+        try {
+            stream = await navigator.mediaDevices.getUserMedia({audio: false, video: {
+                facingMode: "environment",
+                width: 150,
+                height: 150,
+            }});
+            video = document.createElement('video');
+            video.classList.add('cam');
+            video.autoplay = true;
+            document.body.appendChild(video);
+            video.srcObject = stream;
+
+        } catch (err) {
+            console.error("Error accessing camera:", err);
+            showStatus(`Camera access denied: ${err.message}`, 'error');
+        }
+    }
+
+    function takePhoto() {
+        if (stream && video) {
+            canvas = document.createElement('canvas');
+            document.body.appendChild(canvas);
+            canvas.style.display = 'none';
+            const context = canvas.getContext('2d');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            context.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
+            const imageDataUrl = canvas.toDataURL('image/png');
+
+            imgElement = document.createElement('img');
+            imgElement.classList.add('cam');
+            document.body.appendChild(imgElement);
+
+            imgElement.src = imageDataUrl;
+
+            stream.getTracks().forEach(track => track.stop());
+            video.remove();
+            canvas.remove();
+            stream = null;
+        }
+    }
 
     init();
 })();

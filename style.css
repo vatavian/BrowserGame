@@ -151,6 +151,14 @@ main.show-map #menu-toggle::before {
     border: 2px solid rgba(255, 255, 255, 0.12);
 }
 
+.cam {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 100;
+}
+
 .hud {
     position: absolute;
     top: 1rem;
