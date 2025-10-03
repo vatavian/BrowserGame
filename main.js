@@ -25,7 +25,8 @@
         credits: document.getElementById("credits"),
         startButton: document.getElementById("startButton"),
         toggleDebug: document.getElementById("toggleDebug"),
-        menuToggle: document.querySelector(".menu-toggle"),
+        menuToggle: document.getElementById("menu-toggle"),
+        cameraButton: document.getElementById("camera-button"),
     };
 
     const ZOOM_LEVEL = +localStorage.getItem("ZOOM_LEVEL") || 18;

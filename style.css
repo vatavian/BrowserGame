@@ -96,7 +96,7 @@ main.show-map .menu-panel {
 }
 
 /* Menu toggle button */
-.menu-toggle {
+#menu-toggle {
     position: absolute;
     top: 1rem;
     right: 1rem;
@@ -113,15 +113,33 @@ main.show-map .menu-panel {
     justify-content: center; /* Center the icon */
 }
 
-.menu-toggle::before {
+#menu-toggle::before {
     content: "×"; /* Default to X when menu-panel is visible (no show-map) */
     font-size: 1.5rem;
     color: #080b17;
     font-weight: bold; /* Ensure X is prominent */
 }
 
-main.show-map .menu-toggle::before {
+main.show-map #menu-toggle::before {
     content: "≡"; /* Hamburger when map-container is visible (show-map) */
+}
+
+#camera-button {
+    position: absolute;
+    top: 4rem;
+    right: 1rem;
+    width: 2.5rem;
+    height: 2.5rem;
+    font-size: 1.5rem;
+    border: none;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+    z-index: 1001;
+    display: flex;
+    align-items: center;
+    justify-content: center; /* Center the icon */
 }
 
 #map {
