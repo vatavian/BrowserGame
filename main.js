@@ -526,14 +526,11 @@
         const now = Date.now();
         for (const intersection of findIntersections()) {
             const latlng = { lat: intersection[1], lng: intersection[0] };
-            const marker = L.circleMarker(latlng, {
-                radius: 12,
-                color: "#f6a821",
-                fillColor: "#ffce54",
-                weight: 3,
-                fillOpacity: 0.9,
-                className: "target-marker",
-            }).addTo(state.map);
+            const marker = L.marker(latlng, {
+                icon: L.icon({
+                    iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+                    className: "target-marker",
+            })}).addTo(state.map);
             state.targetIntersections.push({
                 position: intersection,
                 radius: TARGET_RADIUS,

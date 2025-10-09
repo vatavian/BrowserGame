@@ -273,7 +273,7 @@ main.show-map #menu-toggle::before {
 
 .leaflet-marker-icon.target-marker {
     border-radius: 50%;
-    animation: targetPulse 1.6s infinite;
+    animation: targetPulse 5s infinite;
 }
 
 .player-icon {
