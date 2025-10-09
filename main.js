@@ -598,8 +598,7 @@
 
     function toggleDebugMode() {
         state.debugEnabled = !state.debugEnabled;
-        elements.toggleDebug.setAttribute("aria-pressed", String(state.debugEnabled));
-        document.body.classList.toggle("debug-enabled", state.debugEnabled);
+        // document.body.classList.toggle("debug-enabled", state.debugEnabled);
         if (!state.debugEnabled) {
             state.debugOffset = { lat: 0, lng: 0 };
             state.userPanActive = false;

@@ -98,7 +98,7 @@ main.show-map .menu-panel {
 /* Menu toggle button */
 #menu-toggle {
     position: absolute;
-    top: 1rem;
+    top: calc(env(titlebar-area-height, 0px) + 1rem);
     right: 1rem;
     width: 2.5rem;
     height: 2.5rem;
@@ -126,7 +126,7 @@ main.show-map #menu-toggle::before {
 
 #camera-button {
     position: absolute;
-    top: 4rem;
+    top: calc(env(titlebar-area-height, 0px) + 4rem);
     right: 1rem;
     width: 2.5rem;
     height: 2.5rem;
@@ -140,15 +140,13 @@ main.show-map #menu-toggle::before {
     display: flex;
     align-items: center;
     justify-content: center; /* Center the icon */
+    padding-bottom: 0.5em; /* Fine-tune vertical position */
 }
 
 #map {
     width: 100%;
     height: 100%;
     z-index: 1;
-    border-radius: 1.25rem;
-    box-shadow: 0 24px 60px rgba(4, 8, 24, 0.45);
-    border: 2px solid rgba(255, 255, 255, 0.12);
 }
 
 .cam {
@@ -161,15 +159,16 @@ main.show-map #menu-toggle::before {
 
 .hud {
     position: absolute;
-    top: 1rem;
-    width: 95%;
+    top: 0;
+    left: 0;
     display: flex;
     flex-wrap: nowrap;
-    justify-content: center;
+    justify-content: left;
     gap: 0.75rem;
     padding: 0 1rem;
     z-index: 10;
     pointer-events: none;
+    -webkit-app-region: drag;
     background: rgba(0, 0, 0, 0.25);
 }
 
@@ -293,6 +292,8 @@ main.show-map #menu-toggle::before {
     }
 }
 
+/*
 body.debug-enabled #map {
     outline: 3px dashed rgba(255, 255, 255, 0.2);
 }
+*/
