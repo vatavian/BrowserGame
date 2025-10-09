@@ -19,7 +19,7 @@
         score: document.getElementById("scoreValue"),
         targetCount: document.getElementById("targetCount"),
         distanceToTarget: document.getElementById("distanceToTarget"),
-        distanceTravelled: document.getElementById("distanceTravelled"),
+        distanceTraveled: document.getElementById("distanceTraveled"),
         gpsAccuracy: document.getElementById("gpsAccuracy"),
         status: document.getElementById("statusMessage"),
         credits: document.getElementById("credits"),
@@ -44,7 +44,7 @@
         displayPosition: null,
         accuracy: null,
         score: 0,
-        distanceTravelled: 0,
+        distanceTraveled: 0,
         lastGamePosition: null,
         gameActive: false,
         target: null,
@@ -127,7 +127,7 @@
         updateDisplayedPosition();
         updateAccuracyVisual();
         updateHudAccuracy();
-        updateTravelledDistance();
+        updateTraveledDistance();
         updateTargetTracking();
     }
 
@@ -157,11 +157,11 @@
     function resetGameState() {
         state.gameActive = true;
         state.score = 0;
-        state.distanceTravelled = 0;
+        state.distanceTraveled = 0;
         state.lastGamePosition = state.displayPosition;
         elements.score.textContent = "0";
         elements.targetCount.textContent = "0";
-        elements.distanceTravelled.textContent = formatDistance(0);
+        elements.distanceTraveled.textContent = formatDistance(0);
         removeTargets();
     }
 
@@ -432,7 +432,7 @@
         state.mapHasFollowed = true;
         updateDisplayedPosition();
         updateAccuracyVisual();
-        updateTravelledDistance();
+        updateTraveledDistance();
         updateTargetTracking();
     }
 
@@ -549,7 +549,7 @@
         state.targetIntersections = [];
     }
 
-    function updateTravelledDistance() {
+    function updateTraveledDistance() {
         if (!state.displayPosition) {
             return;
         }
@@ -559,8 +559,8 @@
         }
         const segment = computeDistanceMeters(state.lastGamePosition, state.displayPosition);
         if (state.gameActive && segment > 0.4) {
-            state.distanceTravelled += segment;
-            elements.distanceTravelled.textContent = formatDistance(state.distanceTravelled);
+            state.distanceTraveled += segment;
+            elements.distanceTraveled.textContent = formatDistance(state.distanceTraveled);
         }
         state.lastGamePosition = state.displayPosition;
     }
@@ -650,7 +650,7 @@
         state.mapHasFollowed = false;
         updateDisplayedPosition();
         updateAccuracyVisual();
-        updateTravelledDistance();
+        updateTraveledDistance();
         updateTargetTracking();
     }
 
