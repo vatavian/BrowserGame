@@ -752,18 +752,20 @@
             canvas.height = video.videoHeight;
             context.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
             const imageDataUrl = canvas.toDataURL('image/png');
-
-            imgElement = document.createElement('img');
-            imgElement.classList.add('cam');
-            document.body.appendChild(imgElement);
-
-            imgElement.src = imageDataUrl;
+            addMarker(imageDataUrl);
 
             stream.getTracks().forEach(track => track.stop());
             video.remove();
             canvas.remove();
             stream = null;
         }
+    }
+
+    function addMarker(url) {
+        return state.playerPosition && url &&
+            L.marker(applyDebugOffset(state.playerPosition), {
+                icon: L.icon({ iconUrl: url, className: "photo-marker" })
+            }).addTo(state.map);
     }
 
     init();
