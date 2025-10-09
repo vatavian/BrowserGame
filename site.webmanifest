@@ -16,12 +16,12 @@
       "purpose": "any"
 	}
   ],
-  "theme_color": "#ffffff",
-  "background_color": "#ffffff",
+  "theme_color": "#000000",
+  "background_color": "#000000",
   "display": "standalone",
   "display_override": ["window-controls-overlay", "standalone", "browser"],
   "launch_handler": { "client_mode": "focus-existing" },
-  "start_url": "https://vatavian.github.io/BrowserGame/",
+  "start_url": "/BrowserGame/",
   "orientation": "portrait",
   "screenshots": [
 	{
@@ -35,7 +35,7 @@
 	  "name": "Start New Game",
 	  "short_name": "New Game",
 	  "description": "Start a new geography game",
-	  "url": "/"
+	  "url": "/BrowserGame/"
 	}
   ],
   "protocol_handlers": [
