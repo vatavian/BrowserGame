@@ -140,7 +140,8 @@ main.show-map #menu-toggle::before {
     display: flex;
     align-items: center;
     justify-content: center; /* Center the icon */
-    padding-bottom: 0.5em; /* Fine-tune vertical position */
+    line-height: 1; /* Helps normalize emoji vertical alignment in flexbox */
+    padding-bottom: 0.3em; /* Fine-tune vertical position */
 }
 
 #map {
