@@ -21,7 +21,7 @@
   "display": "standalone",
   "display_override": ["window-controls-overlay", "standalone", "browser"],
   "launch_handler": { "client_mode": "focus-existing" },
-  "start_url": "/",
+  "start_url": "https://vatavian.github.io/BrowserGame/",
   "orientation": "portrait",
   "screenshots": [
 	{
