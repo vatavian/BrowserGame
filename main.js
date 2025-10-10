@@ -57,6 +57,16 @@
         pendingRoadTiles: new Set(),
         targetIntersections: [],
         visitedIntersections: [],
+        targetIcon: L.divIcon({
+            className: "target-marker",
+            html: '🦴',
+            iconSize: [24, 24],
+            iconAnchor: [18, 18],
+        }),
+    };
+
+    function initMap() {
+        state.map = L.map("map", {})
     };
 
     function init() {
@@ -526,11 +536,7 @@
         const now = Date.now();
         for (const intersection of findIntersections()) {
             const latlng = { lat: intersection[1], lng: intersection[0] };
-            const marker = L.marker(latlng, {
-                icon: L.icon({
-                    iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-                    className: "target-marker",
-            })}).addTo(state.map);
+            const marker = L.marker(latlng, { icon: state.targetIcon }).addTo(state.map);
             state.targetIntersections.push({
                 position: intersection,
                 radius: TARGET_RADIUS,

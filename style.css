@@ -275,6 +275,7 @@ main.show-map #menu-toggle::before {
 .leaflet-marker-icon.target-marker {
     border-radius: 50%;
     animation: targetPulse 5s infinite;
+    font-size: 24px;
 }
 
 .player-icon {
@@ -283,13 +284,13 @@ main.show-map #menu-toggle::before {
 
 @keyframes targetPulse {
     0% {
-        box-shadow: 0 0 0 0 rgba(255, 206, 84, 0.5);
+        box-shadow: 8px 8px 8px 0 rgba(255, 206, 84, 0.5);
     }
     70% {
-        box-shadow: 0 0 0 16px rgba(255, 206, 84, 0);
+        box-shadow: 8px 8px 8px 16px rgba(255, 206, 84, 0);
     }
     100% {
-        box-shadow: 0 0 0 0 rgba(255, 206, 84, 0);
+        box-shadow: 8px 8px 8px 0 rgba(255, 206, 84, 0);
     }
 }
 
